@@ -1,0 +1,30 @@
+/* Estilo para el botón de cambio de visibilidad */
+.toggle-button {
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    color: #333; /* Color del icono */
+  }
+  
+  /* Estilo para el contenido de la Sidecar */
+  .sidebar-content {
+    background-color: #00ff00; /* Color de fondo de la Sidecar */
+    position: fixed;
+    top: 0;
+    transition: right 0.3s ease-in-out; /* Efecto de transición para mostrar/ocultar la Sidecar */
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2); /* Sombra en el lado derecho */
+    overflow-y: auto; /* Habilidad de desplazamiento vertical si el contenido es largo */
+    z-index: 1000; /* Asegura que la Sidecar esté en la parte superior */
+  }
+  
+  /* Cambiar el valor de 'right' para mostrar la Sidecar */
+  .sidebar-content.show {
+    right: 0;
+  }
+  
+  /* Estilo para el contenido dentro de la Sidecar (ajusta según tus necesidades) */
+  .sidebar-content-inner {
+    padding: 20px;
+  }
+  

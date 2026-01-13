@@ -1,0 +1,42 @@
+/* Estilos para el contenedor principal de la aplicación */
+.app-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative; /* Agrega esta propiedad para establecer un contexto de apilamiento */
+}
+
+/* Estilos para el contenedor del SidebarMenu */
+.sidebar-container {
+  width: 300px; /* Ancho deseado del SidebarMenu */
+  position: fixed; /* Fijar el SidebarMenu en el lateral izquierdo */
+  top: 0;
+  left: 0;
+  height: 100%; /* Ocupa toda la altura de la ventana */
+  background-color: #fff; /* Cambia el color de fondo según tus necesidades */
+  z-index: 2; /* Mayor z-index para que el SidebarMenu esté por delante de otros elementos */
+}
+
+/* Estilos para el contenedor del BaseMap */
+.base-map-container {
+  flex: 1; /* El BaseMap ocupará todo el espacio restante */
+  position: relative; /* Para establecer un contexto de apilamiento para el BaseMap */
+  z-index: 1; /* Establece un z-index menor para que el BaseMap quede detrás del SidebarMenu */
+}
+
+/* Estilos específicos para los elementos de Cesium */
+.cesium-widget {
+  position: relative; /* Asegura que los elementos de Cesium estén en el mismo contexto de apilamiento */
+}
+
+/* Estilos para el Sidecar */
+.sidecar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px; /* Ancho deseado del Sidecar */
+  height: 100%; /* Ocupa toda la altura del contenedor principal */
+  background-color: #fff; /* Cambia el color de fondo según tus necesidades */
+  z-index: 3; /* Un z-index mayor que el del SidebarMenu para que aparezca por delante */
+}

@@ -1,0 +1,42 @@
+[{
+  "_id": 1,
+  "name": "Plaza Vega",
+  "isOK": true,
+  "visible": true,
+  "url": "http://90.94.181.205:8080/axis-cgi/mjpg/video.cgi?resolution=640x480&clock=1&date=1&dummy=1697285190392",
+  "location": {
+    "Longitude": -3.7024244219704907,
+    "Latitude": 42.33889423973219,
+    "Height": 915
+  },
+  "additionalInfo": {},
+  "isVideo": true
+},
+{
+  "_id": 2,
+  "name": "Hotel Abba",
+  "isOK": true,
+  "visible": true,
+  "url": "https://video.abbahoteles.com/hls/burgos/master.m3u8",
+  "location": {
+    "Longitude": -3.7082449666328055,
+    "Latitude": 42.34094393515193,
+    "Height": 937.4963198284971
+  },
+  "additionalInfo": {},
+  "isVideo": true
+},
+{
+  "_id": 3,
+  "name": "CEEI",
+  "isOK": true,
+  "visible": true,
+  "isVideo": false,
+  "url": "https://burgoswebcam.es//imagenes_provincia/Burgos.jpg",
+  "location": {
+    "Longitude": -3.634408331729641,
+    "Latitude": 42.359186850991996,
+    "Height": 939.6933656335037
+  },
+  "additionalInfo": {}
+}]

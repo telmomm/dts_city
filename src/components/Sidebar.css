@@ -1,0 +1,45 @@
+/* Sidebar.css */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: -250px; /* Inicialmente oculto */
+    width: 250px;
+    height: 100%;
+    background-color: #343a40; /* Color de fondo del sidebar */
+    overflow-x: hidden;
+    transition: 0.3s;
+    padding-top: 60px;
+  }
+  
+  .sidebar.open {
+    left: 0; /* Mostrar el sidebar cuando está abierto */
+  }
+  
+  .toggle-button {
+    position: absolute;
+    top: 20px;
+    left: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    background-color: transparent;
+    border: none;
+    color: white;
+  }
+  
+  .sidebar-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .sidebar-item {
+    padding: 10px;
+    color: white;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  
+  .sidebar-item:hover {
+    background-color: #495057; /* Cambio de color al pasar el mouse */
+  }
+  

@@ -1,0 +1,39 @@
+/* styles.css (o tu archivo CSS preferido) */
+.config-modal {
+    text-align: center;
+    padding: 20px;
+  }
+  
+  .config-modal h2 {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  
+  .config-modal label {
+    display: block;
+    margin-bottom: 10px;
+  }
+  
+  .config-modal input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+  }
+  
+  .config-modal button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  .config-modal button:hover {
+    background-color: #0056b3;
+  }
+  

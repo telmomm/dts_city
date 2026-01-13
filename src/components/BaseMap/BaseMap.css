@@ -1,0 +1,42 @@
+/* Estilo para el contenedor principal de la página */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Estilo para el barra superior (top bar) */
+.top-bar {
+  height: 30px;
+  background-color: #666;
+  color: white;
+  text-align: center;
+  margin: 0; /* Elimina el margen por defecto */
+  padding: 0; /* Elimina el espacio de relleno por defecto */
+}
+
+/* Estilo para el contenedor principal */
+.map-container {
+  display: flex;
+  flex: 1;
+  height: calc(100% - 30px); /* Altura igual al 100% menos el alto del top-bar y del footer */
+}
+
+/* Estilo para el contenedor del sidebar (parte izquierda) */
+.sidebar-container {
+  width: 300px;
+}
+
+/* Estilo para el contenedor de Cesium (parte derecha) */
+.cesium-container {
+  flex: 1;
+  background-color: #f0f0f0;
+}
+
+/* Estilo para el footer en la parte inferior */
+.footer {
+  height: 30px;
+  background-color: #666;
+  color: white;
+  text-align: center;
+}

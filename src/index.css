@@ -1,0 +1,22 @@
+html, body{
+    height: 100%;
+    color: white;
+  }
+  .container{
+    height: 100%;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: #333;
+  }
+  .topbar{
+    height:30px;
+    background: #666;
+  }
+  .content{
+    /*subtract height of top bar*/
+    height: calc(100vh - 30px);
+  }
+  #cesiumContainer{
+    height:100%;
+  }

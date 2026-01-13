@@ -15,6 +15,7 @@ Configuración de entorno (no subir secretos al repo)
 - REACT_APP_WEBCAM_API_TOKEN
 - REACT_APP_OPENSKY_USERNAME
 - REACT_APP_OPENSKY_PASSWORD
+- REACT_APP_CONFIG_SERVICE_TOKEN
 
 Boostrap Modals   ==>   https://react-bootstrap.netlify.app/docs/components/modal/
 

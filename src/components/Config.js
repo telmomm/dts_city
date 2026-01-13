@@ -20,6 +20,8 @@ class Config extends Component {
     };
   }
 
+  getConfigServiceToken = () => process.env.REACT_APP_CONFIG_SERVICE_TOKEN;
+
   // Agrega una función para cargar los archivos desde la URL con autenticación
   loadFilesFromURL = async (url, token) => {
     try {
@@ -103,10 +105,17 @@ class Config extends Component {
     // Actualizar el estado con la configuración actualizada
     this.setState({ config: updatedConfig });
 
+    const configServiceToken = this.getConfigServiceToken();
+    if (!configServiceToken) {
+      console.warn('Missing REACT_APP_CONFIG_SERVICE_TOKEN; omitting remote save.');
+      this.props.onHide();
+      return;
+    }
+
     // Guardar los archivos en la URL con las modificaciones realizadas
     this.saveFilesToURL(
       'http://localhost:3000/config',
-      '***REMOVED***'
+      configServiceToken
     );
 
     // Cerrar el modal
@@ -120,10 +129,15 @@ class Config extends Component {
   componentDidUpdate(prevProps) {
     // Llama a la función para cargar archivos desde la URL cuando el componente se actualiza
     if (this.props.show !== prevProps.show) {
+      const configServiceToken = this.getConfigServiceToken();
+      if (!configServiceToken) {
+        console.warn('Missing REACT_APP_CONFIG_SERVICE_TOKEN; omitting config load.');
+        return;
+      }
       this.loadFilesFromURL(
         //'http://localhost:3000/config',
         'https://dts-server.onrender.com/config',
-        '***REMOVED***'
+        configServiceToken
       );
     }
   }

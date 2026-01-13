@@ -11,8 +11,12 @@ var Cesium = require('cesium/Cesium');
 import * as OSMFunctions from './OSMFunctions'
     
 export const detectPlanesInArea = () => {
-    const username = 'telmomm';
-    const password = '***REMOVED***';
+    const username = process.env.REACT_APP_OPENSKY_USERNAME;
+    const password = process.env.REACT_APP_OPENSKY_PASSWORD;
+    if (!username || !password) {
+      console.warn('OpenSky credentials missing; skipping plane detection.');
+      return;
+    }
     // Función para codificar las credenciales en Base64
     function encodeCredentials(username, password) {
       const credentials = `${username}:${password}`;
@@ -60,8 +64,12 @@ export const detectPlanesInArea = () => {
 
 // CESIUM SETUP //
 export const setupCesiumViewer = async (component) => {
-    
-    Cesium.Ion.defaultAccessToken = '***REMOVED***';
+    const cesiumToken = process.env.REACT_APP_CESIUM_ION_TOKEN;
+    if (!cesiumToken) {
+      console.warn('Missing REACT_APP_CESIUM_ION_TOKEN; Cesium assets may fail to load.');
+    } else {
+      Cesium.Ion.defaultAccessToken = cesiumToken;
+    }
     try{
       const viewer = new Cesium.Viewer("cesiumContainer", {
       shouldAnimate: false,
@@ -126,7 +134,13 @@ export const setupGoogleTileset = (scene, component) => {
     // Otras opciones de tu elección.
   };
   
-  Cesium.GoogleMaps.defaultApiKey = '***REMOVED***';
+  const googleMapsKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+  if (!googleMapsKey) {
+    console.warn('Missing REACT_APP_GOOGLE_MAPS_API_KEY; skipping Google photorealistic tileset.');
+    return;
+  }
+
+  Cesium.GoogleMaps.defaultApiKey = googleMapsKey;
   Cesium.createGooglePhotorealistic3DTileset().then((tileset) => {
     scene.primitives.add(tileset);
     component.setState ({googleTileset: tileset})
@@ -503,13 +517,18 @@ export const showWebcam = (viewer) => {
       pitch: -90,
       roll: 0
   };
+  const webcamToken = process.env.REACT_APP_WEBCAM_API_TOKEN;
+  if (!webcamToken) {
+    console.warn('Missing REACT_APP_WEBCAM_API_TOKEN; webcam entities will not be loaded.');
+    return;
+  }
   let config = {
       method: 'get',
       maxBodyLength: Infinity,
       url: 'https://dts-server.onrender.com/webcam',
       headers: { 
         'X-Fields': 'name,url,location', 
-        'Authorization': 'Bearer ***REMOVED***'
+        'Authorization': `Bearer ${webcamToken}`
       }
   };
   let responseData;
@@ -615,7 +634,7 @@ export const showWebcamNEW = (viewer) => {
     url: 'https://dts-server.onrender.com/webcam',
     headers: { 
       'X-Fields': 'name,url,location', 
-      'Authorization': 'Bearer ***REMOVED***'
+      'Authorization': `Bearer ${process.env.REACT_APP_WEBCAM_API_TOKEN || ''}`
     }
   };
   let responseData;

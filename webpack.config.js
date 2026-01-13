@@ -73,6 +73,9 @@ module.exports = {
         new webpack.DefinePlugin({
             // Define relative base path in cesium for loading assets
             CESIUM_BASE_URL: JSON.stringify('')
+        }),
+        new webpack.ProvidePlugin({
+            process: 'process/browser'
         })
     ],
     // development server options
@@ -85,6 +88,7 @@ module.exports = {
             cesium: path.resolve(__dirname, cesiumSource)
         },
         fallback: {
+            process: require.resolve('process/browser'),
             stream: require.resolve("stream-browserify"),
             http: require.resolve("http-browserify"),
             https: require.resolve("https-browserify"),

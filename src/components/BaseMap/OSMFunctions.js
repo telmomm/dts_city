@@ -5,244 +5,460 @@ import axios from 'axios';
 import { update } from 'react-spring';
 var Cesium = require('cesium/Cesium');
 
-export const setupBuildings = (viewer) => {
-    // Configura la URL del GeoJSON que contiene datos de edificios
-    const baseUrl = "https://b.data.osmbuildings.org/0.2/anonymous/tile"
-    // Crea una función para cargar los datos GeoJSON
-    const loadGeoJSON = (geoJSONURL) => {
-      return new Promise((resolve, reject) => {
-        fetch(geoJSONURL)
-          .then(response => response.json())
-          .then(data => resolve(data))
-          .catch(error => reject(error));
-      });
-    };
-    const x = 16046;
-    const y = 12122;
-   // const leftTiles = 8
-    //const downTiles = 2;
-    const leftTiles = 0;
-    const downTiles = 0;
+// Cache para evitar cargar los mismos tiles múltiples veces
+const loadedTiles = new Set();
+const buildingEntities = new Map();
+const maxCachedTiles = 100; // Límite de tiles en caché
 
-    // Definir un array para almacenar las promesas de carga de los datos GeoJSON
-    const promises = [];
-    const OSMPromises = [];
-    // Definir un array para almacenar los datos GeoJSON
-    const geoJSONDataArray = [];
+// Función para convertir materiales/colores a colores Cesium
+function getMaterialColor(colorOrMaterial) {
+  if (!colorOrMaterial) return Cesium.Color.LIGHTGRAY;
   
-    // Cargar los datos GeoJSON de las teselas circundantes
-    for (let i = x - leftTiles; i <= x + leftTiles; i++) {
-      for (let j = y - downTiles; j <= y + downTiles; j++) {
-        const geoJSONURL = `${baseUrl}/15/${i}/${j}.json`;
-        const promise = loadGeoJSON(geoJSONURL)
-          .then(data => {
-            geoJSONDataArray.push(data);
-          })
-          .catch(error => console.error(`Error al cargar datos GeoJSON: ${error}`));
+  const value = colorOrMaterial.toLowerCase();
   
-        // Asegúrate de que las promesas se agreguen correctamente al array
-        promises.push(promise);
-      }
+  // Mapeo de materiales comunes a colores
+  const materialMap = {
+    'brick': '#8B4513',
+    'stone': '#696969',
+    'concrete': '#A9A9A9',
+    'plaster': '#F5F5DC',
+    'wood': '#8B7355',
+    'metal': '#C0C0C0',
+    'glass': '#87CEEB',
+    'sandstone': '#C2B280',
+    'limestone': '#E0DCC3',
+    'granite': '#808080',
+    'marble': '#F0F0F0',
+    'timber': '#8B7355',
+    'cladding': '#D3D3D3',
+    'bronze': '#CD7F32',
+    'copper': '#B87333',
+    'gold': '#FFD700',
+    'silver': '#C0C0C0',
+  };
+  
+  // Si es un material conocido, usar su color
+  if (materialMap[value]) {
+    return Cesium.Color.fromCssColorString(materialMap[value]);
+  }
+  
+  // Si parece un color CSS, intentar parsearlo
+  try {
+    return Cesium.Color.fromCssColorString(colorOrMaterial);
+  } catch (e) {
+    return Cesium.Color.LIGHTGRAY;
+  }
+}
+
+// Función para obtener colores de tejados
+function getRoofColor(roofColorOrMaterial, roofMaterial) {
+  // Prioridad: roofColor directo > roofMaterial específico > mapeo general
+  
+  // Si hay roofColor y no es vacío, usarlo
+  if (roofColorOrMaterial && roofColorOrMaterial.toLowerCase().trim()) {
+    const value = roofColorOrMaterial.toLowerCase().trim();
+    
+    // Mapeo de valores CSS directo
+    try {
+      return Cesium.Color.fromCssColorString(roofColorOrMaterial);
+    } catch (e) {
+      // No es un color CSS, continuar con el mapeo
     }
+  }
   
-    // Esperar a que se completen todas las promesas y luego agregar los edificios a la escena
+  // Revisar roofMaterial específicamente
+  if (roofMaterial) {
+    const materialValue = roofMaterial.toLowerCase().trim();
     
-    viewer.scene.globe.tileLoadProgressEvent.addEventListener(function (tileLoadProgress) {
-      if (tileLoadProgress === 1.0) {
-        console.log("Globe Load Complete")
-        Promise.all(promises)
-      .then(() => {
-        geoJSONDataArray.forEach(data => 
-          addBuildingsToScene(viewer, data));
-        console.log("OSM Building Load Complete");
-      })
-      .catch(error => console.error(`Error al cargar datos GeoJSON: ${error}`));
+    if (materialValue === 'metal_sheet' || materialValue === 'metal') {
+      return Cesium.Color.fromCssColorString('#808080'); // Gris metálico
+    }
+    if (materialValue === 'roof_tiles' || materialValue === 'tiles' || materialValue === 'teja') {
+      return Cesium.Color.fromCssColorString('#B8492D'); // Rojo rojizo
+    }
+  }
+  
+  // Mapeo general para roofColor u otros valores
+  if (roofColorOrMaterial) {
+    const value = roofColorOrMaterial.toLowerCase();
+    
+    const roofMap = {
+      'red': '#A52A2A',
+      'tile': '#A0522D',
+      'tiles': '#B8492D',
+      'teja': '#B8492D',
+      'slate': '#2F4F4F',
+      'metal': '#808080',
+      'metal_sheet': '#808080',
+      'chapa': '#808080',
+      'copper': '#B87333',
+      'green': '#2F4F2F',
+      'blue': '#4682B4',
+      'azul': '#4682B4',
+      'brown': '#654321',
+      'grey': '#808080',
+      'gray': '#808080',
+      'black': '#2F2F2F',
+      'tar': '#2F2F2F',
+      'gravel': '#696969',
+      'concrete': '#A9A9A9',
+    };
+    
+    if (roofMap[value]) {
+      return Cesium.Color.fromCssColorString(roofMap[value]);
+    }
+  }
+  
+  // Color por defecto
+  return Cesium.Color.DARKRED;
+}
+
+// Función para crear la descripción HTML del edificio
+function createBuildingDescription(properties, height, minHeight, roofHeight) {
+  const buildingThickness = height - minHeight;
+  
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 300px;">
+      <h3 style="margin: 0 0 10px 0; color: #333;">${properties.name || 'Edificio'}</h3>
+      <table style="width: 100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">ID:</td>
+          <td style="padding: 5px;">${properties.id || 'N/A'}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Altura base:</td>
+          <td style="padding: 5px;">${minHeight}m</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Altura total:</td>
+          <td style="padding: 5px;">${height}m</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Grosor edificio:</td>
+          <td style="padding: 5px;">${buildingThickness}m</td>
+        </tr>
+        ${roofHeight > 0 ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Altura tejado:</td>
+          <td style="padding: 5px;">${roofHeight}m</td>
+        </tr>
+        ` : ''}
+        ${properties.levels ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Plantas:</td>
+          <td style="padding: 5px;">${properties.levels}</td>
+        </tr>
+        ` : ''}
+        ${properties.type ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Tipo:</td>
+          <td style="padding: 5px;">${properties.type}</td>
+        </tr>
+        ` : ''}
+        ${properties.material ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Material:</td>
+          <td style="padding: 5px;">${properties.material}</td>
+        </tr>
+        ` : ''}
+        ${properties.color ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Color:</td>
+          <td style="padding: 5px;">${properties.color}</td>
+        </tr>
+        ` : ''}
+        ${properties.roofShape ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Forma tejado:</td>
+          <td style="padding: 5px;">${properties.roofShape}</td>
+        </tr>
+        ` : ''}
+        ${properties.roofMaterial ? `
+        <tr style="border-bottom: 1px solid #ddd;">
+          <td style="padding: 5px; font-weight: bold;">Material tejado:</td>
+          <td style="padding: 5px;">${properties.roofMaterial}</td>
+        </tr>
+        ` : ''}
+      </table>
+    </div>
+  `;
+}
+
+// Función para aplicar efectos visuales al tejado basándose en roofShape
+function applyRoofEffect(roofShape) {
+  // Aquí se pueden agregar propiedades visuales diferentes según el tipo de tejado
+  // Por ahora devolvemos un objeto con propiedades por defecto
+  const effects = {
+    opacity: 1.0,
+    pattern: null,
+  };
+  
+  if (roofShape === 'pyramid') {
+    // Tejado en punta: visualmente se ve bien con opacidad completa
+    effects.opacity = 1.0;
+  } else if (roofShape === 'cone') {
+    // Tejado cónico: también opacidad completa
+    effects.opacity = 1.0;
+  } else if (roofShape === 'dome') {
+    // Tejado abovedado (si lo hay en el futuro)
+    effects.opacity = 0.95;
+  }
+  
+  return effects;
+}
+
+// Función para limpiar tiles antiguos si hay demasiados
+function cleanupOldTiles(viewer) {
+  if (loadedTiles.size > maxCachedTiles) {
+    const tilesToRemove = Math.floor(maxCachedTiles * 0.3); // Remover 30% de los más antiguos
+    let count = 0;
+    for (const tileKey of loadedTiles) {
+      if (count >= tilesToRemove) break;
+      
+      // Remover entidades asociadas con este tile
+      const entities = buildingEntities.get(tileKey);
+      if (entities) {
+        entities.forEach(entity => viewer.entities.remove(entity));
+        buildingEntities.delete(tileKey);
       }
-    });
+      
+      loadedTiles.delete(tileKey);
+      count++;
+    }
+    console.log(`Cleaned up ${count} old tiles`);
+  }
+}
 
-    
+// Función para convertir coordenadas geográficas a tiles
+function latLonToTile(lat, lon, zoom) {
+  const x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+  const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+  return { x, y, zoom };
+}
+
+// Función para cargar un tile específico de OSM Buildings
+async function loadOSMBuildingTile(viewer, z, x, y) {
+  const tileKey = `${z}/${x}/${y}`;
   
-    
-};
-
-function addBuildingsToScene(viewer, data) {
-
-    const buildings = {}; // Objeto para almacenar las entidades por edificio
-    //const OSMData = getOSMData(data.features);
-    //console.log(data)
-    //console.log(data.features)
-    //console.log("OSMData: ", OSMData);
-  data.features.forEach(feature => {
-    const coordinates = feature.geometry.coordinates[0]; // Se asume que las coordenadas están en la primera parte del array
-
-    // Verifica si las coordenadas tienen al menos 3 puntos
-    if (coordinates.length < 3) {
-      console.error('Coordenadas inválidas:', coordinates);
+  // Si ya cargamos este tile, no lo volvemos a cargar
+  if (loadedTiles.has(tileKey)) {
+    return;
+  }
+  
+  // Limpiar tiles antiguos si hay demasiados
+  cleanupOldTiles(viewer);
+  
+  const url = `https://a.data.osmbuildings.org/0.2/59fcc2e8/tile/${z}/${x}/${y}.json`;
+  
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn(`Tile ${tileKey} not available`);
       return;
     }
+    
+    const data = await response.json();
+    loadedTiles.add(tileKey);
+    
+    // Agregar los edificios de este tile
+    addBuildingsToScene(viewer, data, tileKey);
+    console.log(`Loaded OSM Buildings tile: ${tileKey}`);
+  } catch (error) {
+    console.error(`Error loading tile ${tileKey}:`, error);
+  }
+}
 
-    const height = feature.properties.height;
-    const buildingID = feature.properties.building || "NoBuilding"; // Use "NoBuilding" si no se proporciona
-    const buildingName = feature.properties.name || "Sin nombre"; // Propiedad para el nombre del edificio
-    //feature.OSMData = getOSMData(feature.id);
-    //console.log(feature)
-  const baseHeight = feature.properties.height; // Altura desde la base al vértice del tejado
-  const color = feature.properties.color || feature.properties.material || "white";
-  const roofShape = feature.properties.roofShape || "noRoof";
-  const roofColor = feature.properties.roofColor || "";
-  var cesiumColor = Cesium.Color.fromCssColorString(color);
-  var cesiumRoofColor = Cesium.Color.fromCssColorString(roofColor);
-
-  // Calcular la altura adicional del tejado (la altura desde la base a la cima)
-  const roofHeight = feature.properties.roofHeight || 0; // Altura adicional del tejado
+// Función para cargar tiles basándose en la vista actual
+export function loadVisibleOSMBuildings(viewer) {
+  const camera = viewer.camera;
+  const ellipsoid = viewer.scene.globe.ellipsoid;
   
-  const minHeight = feature.properties.minHeight || feature.properties.height // Altura mínima del edificio
-  const totalHeight = baseHeight; // Altura total del edificio incluyendo el tejado
-  // Crear las posiciones para las paredes del edificio
-  //const altitude = getAltitude(viewer, coord[0], coord[1])
-  const positions = coordinates.map(coord => Cesium.Cartesian3.fromDegrees(coord[0], coord[1], 0));
+  // Obtener la posición de la cámara en coordenadas cartográficas
+  const cameraCartographic = ellipsoid.cartesianToCartographic(camera.position);
+  const lat = Cesium.Math.toDegrees(cameraCartographic.latitude);
+  const lon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+  const height = cameraCartographic.height;
   
-// Crear las posiciones de los vértices del tejado
-  const roofPositions = coordinates.map(coord => [coord[0], coord[1], minHeight]);
-
-    const polygonHierarchy = new Cesium.PolygonHierarchy(positions);
-    let name = "";
-    if(buildingID === "NoBuilding"){
-      name = feature.id;
-    } else {
-      //name = buildingID
-      name = feature.id;
+  // Determinar el nivel de zoom basándose en la altura de la cámara
+  let zoom = 15;
+  if (height > 50000) zoom = 12;
+  else if (height > 20000) zoom = 13;
+  else if (height > 10000) zoom = 14;
+  else if (height > 5000) zoom = 15;
+  else zoom = 16;
+  
+  // Obtener el tile central
+  const centerTile = latLonToTile(lat, lon, zoom);
+  
+  // Cargar el tile central y los adyacentes (3x3 grid)
+  const tileRange = 1;
+  for (let dx = -tileRange; dx <= tileRange; dx++) {
+    for (let dy = -tileRange; dy <= tileRange; dy++) {
+      loadOSMBuildingTile(viewer, zoom, centerTile.x + dx, centerTile.y + dy);
     }
-    if (roofShape == "noRoof"){
-      polygonHierarchy
-      const buildingEntity = viewer.entities.add({
-          name: name,
-          polygon: {
-            hierarchy: polygonHierarchy,
-            extrudedHeight: height,
-            outline: false,
-            perPositionHeight: true,
-            material: cesiumColor,
-          },
-      });
-    } else {
-      if (roofShape == "pyramid"){
+  }
+}
 
-        function calcularPuntoCentralOLD(coordenadas) {
-          if (coordenadas.length === 0) {
-              return null;
-          }
-      
-          // Inicializar variables para el cálculo del promedio de latitud y longitud
-          var promedioLatitud = 0;
-          var promedioLongitud = 0;
-      
-          // Sumar todas las coordenadas de latitud y longitud
-          for (var i = 0; i < coordenadas.length; i += 3) {
-              promedioLatitud += coordenadas[i];
-              promedioLongitud += coordenadas[i + 1];
-          }
-      
-          // Calcular el promedio dividiendo por el número de coordenadas
-          var numVertices = coordenadas.length / 3;
-          promedioLatitud /= numVertices;
-          promedioLongitud /= numVertices;
-      
-          // La altura del punto central se asume como 0
-          var altura = 0;
-      
-          return [promedioLatitud, promedioLongitud, altura];
-         }
-        function calcularPuntoCentral(coordenadas, altura) {
-          if (coordenadas.length === 0) {
-              return null;
-          }
-      
-          // Inicializar variables para el cálculo del promedio de latitud y longitud
-          var promedioLatitud = 0;
-          var promedioLongitud = 0;
-      
-          // Sumar todas las coordenadas de latitud y longitud
-          for (var i = 0; i < coordenadas.length; i++) {
-              promedioLatitud += coordenadas[i][0];
-              promedioLongitud += coordenadas[i][1];
-          }
-      
-          // Calcular el promedio dividiendo por el número de coordenadas
-          var numVertices = coordenadas.length;
-          promedioLatitud /= numVertices;
-          promedioLongitud /= numVertices;
-      
-          // La altura del punto central se asume como 0
-          var altura = altura;
-      
-          return [promedioLatitud, promedioLongitud, altura];
-        }
-        //console.log("Roof Positions: ", roofPositions)
-        var puntoCentral = calcularPuntoCentral(roofPositions, totalHeight);
+export const setupBuildings = (viewer) => {
+    // Cargar edificios inicialmente
+    loadVisibleOSMBuildings(viewer);
+    
+    // Actualizar edificios cuando la cámara se mueva
+    let moveTimeout;
+    viewer.camera.moveEnd.addEventListener(function() {
+      // Usar un timeout para evitar demasiadas peticiones durante el movimiento
+      clearTimeout(moveTimeout);
+      moveTimeout = setTimeout(() => {
+        loadVisibleOSMBuildings(viewer);
+      }, 500);
+    });
+    
+    console.log("OSM Buildings system initialized");
+};
 
-        //console.log("Punto Central: ", puntoCentral)
-        /*
-        for (let i = 0; i < pyramidBase.length/3; i++){
-          // Dividir el array en partes
-          var parte1 = pyramidBase.slice(i*3, i*3+3);
-          var parte2 = pyramidBase.slice(i*3+3, i*3+6);
-          var parte3 = [puntoCentral[0], puntoCentral[1], pyramidHeight];
-          
-          if (i == pyramidBase.length/3-1){
-            var parte1 = pyramidBase.slice(0, 3);
-            var parte2 = pyramidBase.slice(i*3, i*3+3);
-          }
-          
-          var array = parte1.concat(parte2, parte3);
-          console.log(array)
-          const test = viewer.entities.add({
-            name:i,
-            polygon: {
-              hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(array),
-              extrudedHeight: 0,
-              perPositionHeight: true,
-            }
-          });
-          viewer.zoomTo(test)
+function addBuildingsToScene(viewer, data, tileKey) {
+    if (!data || !data.features) {
+      return;
+    }
+    
+    const tileEntities = []; // Array para guardar las entidades de este tile
+    
+    data.features.forEach(feature => {
+      try {
+        // Verificar que tenemos geometría válida
+        if (!feature.geometry || !feature.geometry.coordinates) {
+          return;
         }
-        */
-        
-        for (let i = 0; i < roofPositions.length; i++){
-          // Dividir el array en partes
-          if (i == roofPositions.length-1){
-            var parte1 = [roofPositions[0][0], roofPositions[0][1], roofPositions[0][2]]
-            var parte2 = [roofPositions[i][0], roofPositions[i][1], roofPositions[i][2]]
-          } else {
-            var parte1 = [roofPositions[i][0], roofPositions[i][1], roofPositions[i][2]]
-            var parte2 = [roofPositions[i+1][0], roofPositions[i+1][1], roofPositions[i+1][2]]
-            var parte3 = [puntoCentral[0], puntoCentral[1], puntoCentral[2]]; 
-          }
+
+        const geomType = feature.geometry.type;
+        let coordinateSets = [];
+
+        // Manejar diferentes tipos de geometría
+        if (geomType === 'Polygon') {
+          coordinateSets = [feature.geometry.coordinates];
+        } else if (geomType === 'MultiPolygon') {
+          coordinateSets = feature.geometry.coordinates;
+        } else {
+          return; // Tipo de geometría no soportado
+        }
+
+        // Procesar cada polígono
+        coordinateSets.forEach(polygonCoords => {
+          // El primer array es el anillo exterior
+          const coordinates = polygonCoords[0];
           
-          var array = parte1.concat(parte2, parte3);
-          //console.log("Array: ", array)
-          const test = viewer.entities.add({
+          // Verifica si las coordenadas tienen al menos 3 puntos
+          if (!coordinates || coordinates.length < 3) {
+            return;
+          }
+
+          // Obtener propiedades del edificio
+          // Usar los valores tal como vienen de OSM Buildings sin heurísticas
+          const height = feature.properties.height || 10;
+          const minHeight = feature.properties.minHeight || 0;
+          const color = feature.properties.color || feature.properties.material;
+          const roofShape = feature.properties.roofShape;
+          const roofColor = feature.properties.roofColor;
+          const roofMaterial = feature.properties.roofMaterial;
+          const roofHeight = feature.properties.roofHeight || 0;
+          
+          // Convertir materiales/colores a colores Cesium (completamente opacos)
+          const cesiumColor = getMaterialColor(color);
+          const cesiumRoofColor = getRoofColor(roofColor, roofMaterial);
+
+          // Crear las posiciones para el polígono a nivel del suelo
+          const positions = coordinates.map(coord => 
+            Cesium.Cartesian3.fromDegrees(coord[0], coord[1], 0)
+          );
+
+          const polygonHierarchy = new Cesium.PolygonHierarchy(positions);
+          const name = feature.id || feature.properties.id || 'building';
+
+          // Calcular alturas correctamente:
+          // Si hay tejado, la parte cilíndrica del edificio termina en (height - roofHeight)
+          // El tejado ocupa desde (height - roofHeight) hasta height
+          const cylinderHeight = roofHeight > 0 ? height - roofHeight : height;
+          const buildingThickness = height - minHeight;
+
+          // Crear el edificio base (parte cilíndrica/vertical)
+          const buildingEntity = viewer.entities.add({
             name: name,
+            description: createBuildingDescription(feature.properties, height, minHeight, roofHeight),
+            properties: {
+              osmId: feature.id,
+              height: height,
+              minHeight: minHeight,
+              roofHeight: roofHeight,
+              roofShape: roofShape,
+              roofMaterial: roofMaterial,
+              color: color,
+              roofColor: roofColor,
+              buildingName: feature.properties.name || 'Sin nombre',
+              levels: feature.properties.levels,
+              buildingType: feature.properties.type,
+              ...feature.properties
+            },
             polygon: {
-              hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(array),
-              extrudedHeight: 0,
-              perPositionHeight: true,
-              material: cesiumRoofColor,
-            }
+              hierarchy: polygonHierarchy,
+              extrudedHeight: cylinderHeight,
+              height: minHeight,
+              outline: false,
+              material: cesiumColor,
+              perPositionHeight: false,
+            },
           });
-          viewer.zoomTo(test)
-        }
+          tileEntities.push(buildingEntity);
 
-        /*
-        viewer.entities.add({
-          polygon: {
-            hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(pyramidBase)
+          // Agregar techo si es necesario
+          if ((roofShape === 'pyramid' || roofShape === 'cone') && roofHeight > 0) {
+            // Calcular el centro del polígono para el vértice de la pirámide/cono
+            let centerLon = 0, centerLat = 0;
+            coordinates.forEach(coord => {
+              centerLon += coord[0];
+              centerLat += coord[1];
+            });
+            centerLon /= coordinates.length;
+            centerLat /= coordinates.length;
+
+            // La base del techo está en (height - roofHeight) = donde termina el cilindro
+            // El pico del techo está en height = donde termina todo el edificio
+            const roofBase = height - roofHeight;
+            const roofTop = height;
+            
+            // Aplicar efectos visuales según el tipo de tejado
+            const roofEffect = applyRoofEffect(roofShape);
+
+            // Crear triángulos para cada lado de la pirámide/cono
+            for (let i = 0; i < coordinates.length - 1; i++) {
+              const p1 = coordinates[i];
+              const p2 = coordinates[i + 1];
+              
+              const roofPositions = [
+                p1[0], p1[1], roofBase,
+                p2[0], p2[1], roofBase,
+                centerLon, centerLat, roofTop
+              ];
+
+              const roofEntity = viewer.entities.add({
+                name: `${name}_roof_${i}`,
+                polygon: {
+                  hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(roofPositions),
+                  material: cesiumRoofColor,
+                  perPositionHeight: true,
+                  outline: false,
+                },
+              });
+              tileEntities.push(roofEntity);
+            }
           }
-        })
-        */
+        });
+      } catch (error) {
+        console.error('Error procesando edificio:', error, feature);
       }
-    }
-  });
+    });
+  
+  // Guardar las entidades de este tile en el Map para poder limpiarlas después
+  buildingEntities.set(tileKey, tileEntities);
 };
 
 const getOSMDataOLD = async (buildingID) => {

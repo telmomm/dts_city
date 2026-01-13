@@ -258,12 +258,12 @@ function getTeselas(viewer) {
 }
 
 export const setupCamera = (viewer) => {
-  const burgosPosition = Cesium.Cartesian3.fromDegrees(-3.749502435033885, 42.232644709479196, 11176.753177854962);
-  //const burgosPosition = Cesium.Cartesian3.fromDegrees(-3.6998522076920697, 42.3470640230894, 400);
+  // Catedral de Burgos: 42.3404° N, 3.7038° W
+  const burgosPosition = Cesium.Cartesian3.fromDegrees(-3.7038, 42.3404, 500);
   const cameraOrientation = {
-    heading: Cesium.Math.toRadians(13.82378909751138),
-    pitch: Cesium.Math.toRadians(-40.562911838151024),
-    roll: Cesium.Math.toRadians(0.005412098115048774),
+    heading: Cesium.Math.toRadians(0),
+    pitch: Cesium.Math.toRadians(-45),
+    roll: Cesium.Math.toRadians(0),
   };
 
   viewer.camera.setView({

@@ -30,9 +30,9 @@ class BaseMap extends Component {
         <div className="page-container">
         {/* Contenedor principal */}
         <div id="mapContainer" className="map-container">
-          <div id="sidebarContainer" className="sidebar-container">
+          {/* <div id="sidebarContainer" className="sidebar-container">
             <SidebarMenu viewer={this.viewer}/>
-          </div>
+          </div> */}
 
           <div id="cesiumContainer" className="cesium-container"></div>
         </div>

@@ -290,13 +290,13 @@ export function loadVisibleOSMBuildings(viewer) {
   // Obtener el tile central
   const centerTile = latLonToTile(lat, lon, zoom);
   
-  // Cargar el tile central y los adyacentes (3x3 grid)
-  const tileRange = 1;
-  for (let dx = -tileRange; dx <= tileRange; dx++) {
-    for (let dy = -tileRange; dy <= tileRange; dy++) {
-      loadOSMBuildingTile(viewer, zoom, centerTile.x + dx, centerTile.y + dy);
-    }
-  }
+  // Cargar solo el tile central y los 4 adyacentes directos (cruz, no cuadrícula completa)
+  // Esto reduce significativamente las peticiones sin perder cobertura visible
+  loadOSMBuildingTile(viewer, zoom, centerTile.x, centerTile.y); // Centro
+  loadOSMBuildingTile(viewer, zoom, centerTile.x - 1, centerTile.y); // Izquierda
+  loadOSMBuildingTile(viewer, zoom, centerTile.x + 1, centerTile.y); // Derecha
+  loadOSMBuildingTile(viewer, zoom, centerTile.x, centerTile.y - 1); // Arriba
+  loadOSMBuildingTile(viewer, zoom, centerTile.x, centerTile.y + 1); // Abajo
 }
 
 export const setupBuildings = (viewer) => {
@@ -306,11 +306,11 @@ export const setupBuildings = (viewer) => {
     // Actualizar edificios cuando la cámara se mueva
     let moveTimeout;
     viewer.camera.moveEnd.addEventListener(function() {
-      // Usar un timeout para evitar demasiadas peticiones durante el movimiento
+      // Timeout mayor (1 segundo) para reducir peticiones durante navegación activa
       clearTimeout(moveTimeout);
       moveTimeout = setTimeout(() => {
         loadVisibleOSMBuildings(viewer);
-      }, 500);
+      }, 1000);
     });
     
     console.log("OSM Buildings system initialized");
@@ -410,45 +410,153 @@ function addBuildingsToScene(viewer, data, tileKey) {
           tileEntities.push(buildingEntity);
 
           // Agregar techo si es necesario
-          if ((roofShape === 'pyramid' || roofShape === 'cone') && roofHeight > 0) {
-            // Calcular el centro del polígono para el vértice de la pirámide/cono
-            let centerLon = 0, centerLat = 0;
-            coordinates.forEach(coord => {
-              centerLon += coord[0];
-              centerLat += coord[1];
-            });
-            centerLon /= coordinates.length;
-            centerLat /= coordinates.length;
-
-            // La base del techo está en (height - roofHeight) = donde termina el cilindro
-            // El pico del techo está en height = donde termina todo el edificio
+          if (roofHeight > 0) {
             const roofBase = height - roofHeight;
             const roofTop = height;
-            
-            // Aplicar efectos visuales según el tipo de tejado
-            const roofEffect = applyRoofEffect(roofShape);
 
-            // Crear triángulos para cada lado de la pirámide/cono
-            for (let i = 0; i < coordinates.length - 1; i++) {
-              const p1 = coordinates[i];
-              const p2 = coordinates[i + 1];
-              
-              const roofPositions = [
-                p1[0], p1[1], roofBase,
-                p2[0], p2[1], roofBase,
-                centerLon, centerLat, roofTop
+            if (roofShape === 'pyramid' || roofShape === 'cone') {
+              // Tejado piramidal o cónico - pico en el centro
+              let centerLon = 0, centerLat = 0;
+              coordinates.forEach(coord => {
+                centerLon += coord[0];
+                centerLat += coord[1];
+              });
+              centerLon /= coordinates.length;
+              centerLat /= coordinates.length;
+
+              const roofEffect = applyRoofEffect(roofShape);
+
+              // Crear triángulos desde cada lado al centro
+              for (let i = 0; i < coordinates.length - 1; i++) {
+                const p1 = coordinates[i];
+                const p2 = coordinates[i + 1];
+                
+                const roofPositions = [
+                  p1[0], p1[1], roofBase,
+                  p2[0], p2[1], roofBase,
+                  centerLon, centerLat, roofTop
+                ];
+
+                const roofEntity = viewer.entities.add({
+                  name: `${name}_roof_${i}`,
+                  polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(roofPositions),
+                    material: cesiumRoofColor,
+                    perPositionHeight: true,
+                    outline: false,
+                  },
+                });
+                tileEntities.push(roofEntity);
+              }
+            } else if (roofShape === 'gabled' || roofShape === 'gable') {
+              // Tejado a dos aguas simple - cresta longitudinal paralela al lado más largo
+              // Encuentra el lado más largo del edificio (será la base de la cresta)
+              let maxSideLength = 0;
+              let mainSideIdx = 0;
+
+              for (let i = 0; i < coordinates.length - 1; i++) {
+                const sideLength = Math.sqrt(
+                  Math.pow(coordinates[i + 1][0] - coordinates[i][0], 2) +
+                  Math.pow(coordinates[i + 1][1] - coordinates[i][1], 2)
+                );
+                if (sideLength > maxSideLength) {
+                  maxSideLength = sideLength;
+                  mainSideIdx = i;
+                }
+              }
+
+              // Los dos puntos de cresta corren paralelos al lado más largo
+              const mainSideP1 = coordinates[mainSideIdx];
+              const mainSideP2 = coordinates[mainSideIdx + 1];
+
+              // La cresta corre a lo largo del centro del edificio, paralela a este lado
+              // Calcula el punto central perpendicular del edificio
+              const centerLon = coordinates.reduce((sum, coord) => sum + coord[0], 0) / coordinates.length;
+              const centerLat = coordinates.reduce((sum, coord) => sum + coord[1], 0) / coordinates.length;
+
+              // Vector del lado principal
+              const sideVecX = mainSideP2[0] - mainSideP1[0];
+              const sideVecY = mainSideP2[1] - mainSideP1[1];
+
+              // Vector perpendicular normalizado (apunta hacia el interior)
+              const perpLen = Math.sqrt(sideVecX * sideVecX + sideVecY * sideVecY);
+              const perpUnitX = -sideVecY / perpLen;
+              const perpUnitY = sideVecX / perpLen;
+
+              // Distancia desde el lado principal hasta el centro (altura del edificio perpendicular)
+              const distToCenter = Math.sqrt(
+                Math.pow(centerLon - (mainSideP1[0] + mainSideP2[0]) / 2, 2) +
+                Math.pow(centerLat - (mainSideP1[1] + mainSideP2[1]) / 2, 2)
+              );
+
+              // Puntos de cresta: a medio camino entre el lado principal y el centro opuesto
+              const ridgeOffsetFactor = 0.5; // Mitad de la distancia
+              const ridgeP1 = [
+                mainSideP1[0] + perpUnitX * distToCenter * ridgeOffsetFactor,
+                mainSideP1[1] + perpUnitY * distToCenter * ridgeOffsetFactor
+              ];
+              const ridgeP2 = [
+                mainSideP2[0] + perpUnitX * distToCenter * ridgeOffsetFactor,
+                mainSideP2[1] + perpUnitY * distToCenter * ridgeOffsetFactor
               ];
 
-              const roofEntity = viewer.entities.add({
-                name: `${name}_roof_${i}`,
+              // Crear polígonos de techo: uno para cada lado del edificio
+              for (let i = 0; i < coordinates.length - 1; i++) {
+                const sideP1 = coordinates[i];
+                const sideP2 = coordinates[i + 1];
+
+                // Encontrar los dos puntos de cresta más cercanos a este lado
+                const midSideX = (sideP1[0] + sideP2[0]) / 2;
+                const midSideY = (sideP1[1] + sideP2[1]) / 2;
+
+                // Encontrar el punto de cresta más cercano al inicio del lado
+                const distP1ToRidge1 = Math.sqrt(
+                  Math.pow(sideP1[0] - ridgeP1[0], 2) +
+                  Math.pow(sideP1[1] - ridgeP1[1], 2)
+                );
+                const distP1ToRidge2 = Math.sqrt(
+                  Math.pow(sideP1[0] - ridgeP2[0], 2) +
+                  Math.pow(sideP1[1] - ridgeP2[1], 2)
+                );
+
+                const closestRidgeP1 = distP1ToRidge1 < distP1ToRidge2 ? ridgeP1 : ridgeP2;
+                const otherRidgeP = distP1ToRidge1 < distP1ToRidge2 ? ridgeP2 : ridgeP1;
+
+                // Crear un cuadrilátero: los dos puntos del lado base + los dos puntos de cresta
+                const roofPositions = [
+                  sideP1[0], sideP1[1], roofBase,
+                  sideP2[0], sideP2[1], roofBase,
+                  otherRidgeP[0], otherRidgeP[1], roofTop,
+                  closestRidgeP1[0], closestRidgeP1[1], roofTop
+                ];
+
+                const roofEntity = viewer.entities.add({
+                  name: `${name}_roof_gabled_${i}`,
+                  polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(roofPositions),
+                    material: cesiumRoofColor,
+                    perPositionHeight: true,
+                    outline: false,
+                  },
+                });
+                tileEntities.push(roofEntity);
+              }
+            } else {
+              // Tejado plano - solo una superficie horizontal
+              const roofPositions = coordinates.map(coord =>
+                Cesium.Cartesian3.fromDegrees(coord[0], coord[1], roofTop)
+              );
+              const roofHierarchy = new Cesium.PolygonHierarchy(roofPositions);
+
+              const flatRoof = viewer.entities.add({
+                name: `${name}_roof_flat`,
                 polygon: {
-                  hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(roofPositions),
+                  hierarchy: roofHierarchy,
                   material: cesiumRoofColor,
-                  perPositionHeight: true,
                   outline: false,
                 },
               });
-              tileEntities.push(roofEntity);
+              tileEntities.push(flatRoof);
             }
           }
         });

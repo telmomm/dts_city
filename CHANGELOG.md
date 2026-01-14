@@ -5,13 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.1] - 2026-01-13
+## [1.0.2] - 2026-01-14
 
 ### Added
-- Integration of OSM Buildings API with dynamic tile loading based on camera position
-- Tile caching system with a maximum limit of 100 tiles
-- 3D building rendering with correct geometry (support for Polygon and MultiPolygon)
-- Material-based coloring system for walls and roofs
+- Gabled (two-way) roof support with longitudinal ridge parallel to the longest building side
+- Optimized tile loading: reduced from 9 tiles (3x3 grid) to 5 tiles (cross pattern) for 44% fewer HTTP requests
+- Improved initial camera positioning: closer view at 300m altitude (previously 500m) centered on Burgos Cathedral
+- Explicit definition of process.env variables in webpack config for browser compatibility
+
+### Changed
+- Simplified gabled roof algorithm: single ridge line running longitudinally with water flowing down on both sides
+- Increased camera movement debounce timeout from 500ms to 1000ms to reduce tile requests during navigation
+- Optimized roof color mapping: metal roofs now display in darker gray (#505050)
+- Improved OpenStreetMap imagery provider initialization for better map base layer stability
+
+### Fixed
+- Gabled roof geometry: all building sides now properly converge at ridge points
+- Building height calculation for irregular polygons with gabled roofs
+- Map base layer disappearing issue when terrain was enabled
+- Globe visibility ensuring proper rendering of base imagery layer
+
+### Performance
+- Reduced initial load time with optimized tile loading strategy
+- Fewer simultaneous HTTP requests for building tiles
+- Improved rendering efficiency with debounced camera movement handler
+
 - Specific colors for different roof types (metal_sheet → gray, roof_tiles → red)
 - Interactive building information on click with HTML table showing properties
 - Support for pyramidal and conical roofs with correct height

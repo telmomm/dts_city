@@ -72,7 +72,14 @@ module.exports = {
         }),
         new webpack.DefinePlugin({
             // Define relative base path in cesium for loading assets
-            CESIUM_BASE_URL: JSON.stringify('')
+            CESIUM_BASE_URL: JSON.stringify(''),
+            // Define environment variables for browser
+            'process.env.REACT_APP_OPENSKY_USERNAME': JSON.stringify(process.env.REACT_APP_OPENSKY_USERNAME || ''),
+            'process.env.REACT_APP_OPENSKY_PASSWORD': JSON.stringify(process.env.REACT_APP_OPENSKY_PASSWORD || ''),
+            'process.env.REACT_APP_CESIUM_ION_TOKEN': JSON.stringify(process.env.REACT_APP_CESIUM_ION_TOKEN || ''),
+            'process.env.REACT_APP_GOOGLE_MAPS_API_KEY': JSON.stringify(process.env.REACT_APP_GOOGLE_MAPS_API_KEY || ''),
+            'process.env.REACT_APP_WEBCAM_API_TOKEN': JSON.stringify(process.env.REACT_APP_WEBCAM_API_TOKEN || ''),
+            'process.env.REACT_APP_CONFIG_SERVICE_TOKEN': JSON.stringify(process.env.REACT_APP_CONFIG_SERVICE_TOKEN || '')
         }),
         new webpack.ProvidePlugin({
             process: 'process/browser'

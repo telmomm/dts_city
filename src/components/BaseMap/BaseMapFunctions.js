@@ -9,6 +9,7 @@ import PopUp from '.././PopUp'
 
 var Cesium = require('cesium/Cesium');
 import * as OSMFunctions from './OSMFunctions'
+import * as OSMWater from './OSMWater'
     
 export const detectPlanesInArea = () => {
     const username = process.env.REACT_APP_OPENSKY_USERNAME;
@@ -78,11 +79,18 @@ export const setupCesiumViewer = async (component) => {
       timeline: false,
       navigationHelpButton: false,
       showLogo: false,
-      baseLayer: createMapProvider(),
+      baseLayerPicker: false,
       requestRenderMode: true,
       maximumRenderTimeChange : Infinity,
       
     });
+    
+    // Añadir el mapa base de OpenStreetMap directamente
+    viewer.imageryLayers.removeAll();
+    const osmProvider = new Cesium.OpenStreetMapImageryProvider({
+      url: 'https://tile.openstreetmap.org/'
+    });
+    viewer.imageryLayers.addImageryProvider(osmProvider);
     
     //Cesium ION Logo Removal
     viewer._cesiumWidget._creditContainer.parentNode.removeChild(
@@ -94,8 +102,20 @@ export const setupCesiumViewer = async (component) => {
     const scene = viewer.scene;
 
     //setupOsmBuildingsOLD(scene, component);
-    //await setupTerrain(scene);
+    // Asegurar que el globo esté visible
+    scene.globe.show = true;
+    
+    // Cargar terreno en segundo plano sin bloquear
+    /*setupTerrainOLD(scene).then(() => {
+      console.log("Terrain loaded successfully");
+      // Habilitar depth test para que los edificios se rendericen correctamente sobre el terreno
+      scene.globe.depthTestAgainstTerrain = true;
+    }).catch(error => {
+      console.error("Error loading terrain:", error);
+    });*/
+    
     OSMFunctions.setupBuildings(viewer);
+    OSMWater.setupWater(viewer);
     setupCamera(viewer);
     setupClickHandler(viewer);
     
@@ -184,7 +204,7 @@ export const createMapProvider = () => {
     return Cesium.ImageryProvider.loadImage(this, url, request);
   };
 
-  return new Cesium.ImageryLayer(imageryProvider);
+  return imageryProvider;
 };
 
 function interceptRequest(x, y, level, url, headers) {
@@ -259,10 +279,11 @@ function getTeselas(viewer) {
 
 export const setupCamera = (viewer) => {
   // Catedral de Burgos: 42.3404° N, 3.7038° W
-  const burgosPosition = Cesium.Cartesian3.fromDegrees(-3.7038, 42.3404, 500);
+  // Posición más cercana (300m) para vista detallada inicial
+  const burgosPosition = Cesium.Cartesian3.fromDegrees(-3.7038, 42.3404, 300);
   const cameraOrientation = {
     heading: Cesium.Math.toRadians(0),
-    pitch: Cesium.Math.toRadians(-45),
+    pitch: Cesium.Math.toRadians(-50),
     roll: Cesium.Math.toRadians(0),
   };
 
@@ -302,12 +323,15 @@ export const setupTerrain = async (scene) => {
     });
 
     scene.terrainProvider = mapTerrain;
+    
+    // Habilitar el terreno en el globo
+    scene.globe.depthTestAgainstTerrain = true;
 
     // Utilizo la propiedad readyPromise para obtener una promesa cuando el terreno esté listo
     await mapTerrain.readyPromise;
       console.info("Terrain ready");
     } catch (error) {
-      console.error(error);
+      console.error("Error loading terrain:", error);
     }
 };
 

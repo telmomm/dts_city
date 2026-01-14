@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-01-14
+
+### Added
+- Renderizado de ríos con `natural=water` y `water=river`, incluyendo relaciones multipolígono (outer) para cauces anchos.
+
+### Changed
+- Cierre automático de anillos cuando los datos OSM no vienen sellados, para evitar fugas de polígonos.
+- Estilo de agua ajustado (altura 2 m, contorno azul) para que sea visible sobre el terreno.
+
+### Fixed
+- Relaciones multipolígono (ej. 2178376) ahora se incluyen y renderizan correctamente, evitando huecos en el río.
+
 ## [1.0.2] - 2026-01-14
 
 ### Added
